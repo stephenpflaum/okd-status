@@ -1,0 +1,27 @@
+# okd-status configuration (OPTIONAL).
+#
+# Copy this file to one of these locations, or point OKD_STATUS_CONF at it:
+#   ~/.config/okd-status/config        (default search path)
+#   OKD_STATUS_CONF=/path/to/config ./okd-status.sh
+#
+# It is sourced as bash, so it can define any of the variables below. Without a
+# config file, the infra pane simply shows the generic cluster summary.
+
+# SERVICES — extra HTTP endpoints to health-check, shown in a "SERVICES" block.
+# Format: "Display Name|URL". A 2xx/3xx response is green, anything else red.
+# (curl -k is used, so self-signed certs are fine.)
+#
+# SERVICES=(
+#   "Vault|https://vault.example.com/v1/sys/health"
+#   "Grafana|https://grafana.example.com/api/health"
+#   "Registry|https://registry.example.com/healthz"
+# )
+
+# SSH_HOSTS — machines to show a load-average + memory header for, in a "HOSTS"
+# block. Format: "label|ssh-target". Requires passwordless SSH (BatchMode) and
+# a Linux target with /proc/loadavg and `free`.
+#
+# SSH_HOSTS=(
+#   "node-a|root@10.0.0.11"
+#   "node-b|core@node-b.example.com"
+# )
