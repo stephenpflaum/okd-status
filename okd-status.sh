@@ -3,8 +3,8 @@
 #
 # Splits a tmux window into self-resizing panes:
 #   ┌────────────────────────┬──────────────────────────────┐
-#   │ infra (cluster summary │ cluster (node usage / alerts  │
-#   │  + optional checks)    │  / top pods by memory)        │
+#   │ infra (cluster summary │ cluster (node usage / firing  │
+#   │  + optional checks)    │  alerts)                      │
 #   ├────────────────────────┴──────────────────────────────┤
 #   │ nodes      — `oc get nodes`, colour-coded              │
 #   │ mcp        — machine config pools                      │
@@ -182,9 +182,9 @@ chmod +x /tmp/okd-infra.sh
 
 cat > /tmp/okd-cluster.sh << 'SCRIPT'
 #!/usr/bin/env bash
-# Top-right pane: OKD node resource usage, firing alerts, and top pods by
-# memory. Does NOT call tmux resize — the infra pane on the left owns the
-# top-row height, so this filler never starves the panes below it.
+# Top-right pane: OKD node resource usage and firing alerts. Does NOT call
+# tmux resize — the infra pane on the left owns the top-row height, so this
+# filler never starves the panes below it.
 export KUBECONFIG="${KUBECONFIG:-$HOME/.kube/config}"
 R='\033[1;31m'; G='\033[1;32m'; Y='\033[1;33m'; C='\033[0;36m'; W='\033[1;37m'; D='\033[0;90m'; N='\033[0m'
 hr() {  # full-width section rule:  hr "TITLE"
@@ -252,17 +252,6 @@ if extra > 0: print("MORE %d" % extra)
         done
         printf '%s\n' "$parsed" | awk -v d="$D" -v n="$N" '/^MORE/{printf "   %s+%s more%s\n",d,$2,n}'
       fi
-    fi
-
-    # Top pods by memory
-    echo ""
-    hr "TOP PODS (mem)"
-    if tp=$(oc adm top pods -A --no-headers 2>/dev/null) && [ -n "$tp" ]; then
-      printf '%s\n' "$tp" | sort -k4 -hr | head -6 | while read -r ns name cpu mem _; do
-        printf "  %8s  %-26s ${D}%s${N}\n" "$mem" "$name" "$ns"
-      done
-    else
-      printf " ${D}metrics unavailable${N}\n"
     fi
   )
   clear
