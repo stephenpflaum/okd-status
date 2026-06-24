@@ -107,6 +107,35 @@ while true; do
       printf "\n"
     fi
 
+    # Firing alerts roll-up (warning/critical, Watchdog excluded). A count
+    # only — the node-usage pane on the right lists them by name.
+    aj=$(oc -n openshift-monitoring exec prometheus-k8s-0 -c prometheus -- \
+           curl -s --max-time 5 http://localhost:9090/api/v1/alerts 2>/dev/null)
+    acnt=$(printf '%s' "$aj" | python3 -c '
+import sys, json
+try:
+    a = json.load(sys.stdin)["data"]["alerts"]
+except Exception:
+    print("ERR"); sys.exit()
+f = [x for x in a if x.get("state") == "firing"
+     and x["labels"].get("alertname") != "Watchdog"
+     and x["labels"].get("severity") in ("warning", "critical")]
+crit = sum(1 for x in f if x["labels"].get("severity") == "critical")
+print("%d %d" % (len(f), crit))
+' 2>/dev/null)
+    if [ -z "$acnt" ] || [ "$acnt" = "ERR" ]; then
+      printf " ${D}● alerts unavailable${N}\n"
+    else
+      tot=${acnt%% *}; crit=${acnt##* }
+      if [ "${tot:-0}" -eq 0 ]; then
+        printf " ${G}●${N} alerts ${G}none firing${N}\n"
+      elif [ "${crit:-0}" -gt 0 ]; then
+        printf " ${R}●${N} alerts ${R}%s firing${N} ${D}(%s critical)${N}\n" "$tot" "$crit"
+      else
+        printf " ${Y}●${N} alerts ${Y}%s firing${N}\n" "$tot"
+      fi
+    fi
+
     # Optional: user-defined service endpoint checks
     if [ "${#SERVICES[@]}" -gt 0 ]; then
       echo ""
@@ -279,19 +308,29 @@ while true; do
   [[ "$sd"    -gt 0 ]] && summary="${summary} · ${sd} SchedulingDisabled"
   [[ "$other" -gt 0 ]] && summary="${summary} · ${other} Other"
 
-  # Body: show every node, colour-coded by status
+  # Body: only NON-green nodes (NotReady, cordoned, or unknown state). Healthy
+  # nodes (Ready and not SchedulingDisabled) are hidden — the banner still
+  # counts them. The column header is kept separate so it only shows when there
+  # is at least one anomaly to label.
+  header=$(printf '%s\n' "$output" | awk 'NR==1{print "\033[1;37m" $0 "\033[0m"}')
   body=$(printf '%s\n' "$output" | awk '
-    NR==1                       { print "\033[1;37m" $0 "\033[0m"; next }
+    NR==1                       { next }
     /NotReady/                  { print "\033[1;31m" $0 "\033[0m"; next }
     /SchedulingDisabled/        { print "\033[1;33m" $0 "\033[0m"; next }
-    $2 ~ /(^|,)Ready(,|$)/      { print "\033[1;32m" $0 "\033[0m"; next }
+    $2 ~ /(^|,)Ready(,|$)/      { next }
                                 { print "\033[1;31m" $0 "\033[0m" }
   ')
 
   clear
   printf "${hdr}━━━ NODES  ${summary} "; printf '%.0s━' {1..30}; printf '\033[0m\n'
-  printf '%s\n' "$body"
-  lines=$(( $(printf '%s\n' "$body" | wc -l) + 2 ))
+  if [[ -z "$body" ]]; then
+    printf '\033[1;32m  all %s nodes Ready\033[0m\n' "$rdy"
+    lines=3
+  else
+    printf '%s\n' "$header"
+    printf '%s\n' "$body"
+    lines=$(( $(printf '%s\n' "$body" | wc -l) + 3 ))
+  fi
   tmux resize-pane -t "$TMUX_PANE" -y "$lines" 2>/dev/null
   sleep 10
 done

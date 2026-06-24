@@ -15,9 +15,10 @@ server, no config required — just a shell script.
 │  ● nodes 6/6 ready         │   ● worker-1    800m 22%  6Gi 41% │
 │  ● operators 33 available  │ ALERTS (0 firing)                 │
 │  ● machine config pools ok │   ● none (warning/critical)       │
-│  (optional SERVICES/HOSTS) │ TOP PODS (mem) ...                │
+│  ● alerts none firing      │ TOP PODS (mem) ...                │
+│  (optional SERVICES/HOSTS) │                                   │
 ├────────────────────────────┴──────────────────────────────────┤
-│ NODES   6 Ready · 0 NotReady                                   │
+│ NODES   6 Ready · 0 NotReady    all 6 nodes Ready              │
 │ MACHINE CONFIG POOLS                                           │
 │ OPERATORS  version: 4.x.y   all 33 operators green             │
 │ PODS (non-running)   no non-running pods                       │
@@ -29,9 +30,9 @@ server, no config required — just a shell script.
 
 | Pane | Refresh | Contents |
 |------|--------:|----------|
-| **cluster summary** | 30s | cluster version, nodes ready, operators degraded/progressing, MCP status (+ optional service & host checks) |
+| **cluster summary** | 30s | cluster version, nodes ready, operators degraded/progressing, MCP status, firing-alert roll-up (+ optional service & host checks) |
 | **node usage** | 45s | `oc adm top nodes`, firing Prometheus alerts (warning/critical, Watchdog dropped), top pods by memory |
-| **nodes** | 10s | `oc get nodes`, colour-coded; banner tallies Ready / NotReady / SchedulingDisabled |
+| **nodes** | 10s | `oc get nodes` — only **non-green** nodes (NotReady / cordoned / unknown); banner tallies Ready / NotReady / SchedulingDisabled |
 | **machine config pools** | 20s | `oc get mcp`, highlighting updating/degraded pools |
 | **operators** | 30s | cluster version + `oc get co`, hiding healthy operators so only anomalies show |
 | **pods** | 15s | `oc get pods -A` filtered to non-running (CrashLoop, Pending, OOMKill, …) |
