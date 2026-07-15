@@ -326,6 +326,80 @@ done
 SCRIPT
 chmod +x /tmp/okd-nodes.sh
 
+cat > /tmp/okd-argo.sh << 'SCRIPT'
+#!/usr/bin/env bash
+export KUBECONFIG="${KUBECONFIG:-$HOME/.kube/config}"
+while true; do
+  # Fully-qualified resource name: `apps` is ambiguous, and clusters without
+  # Argo CD have no applications.argoproj.io CRD at all.
+  output=$(oc get applications.argoproj.io -A 2>&1)
+
+  # Argo CD absent (or API unreachable): collapse to a single dim banner line
+  # instead of erroring forever. Re-check slowly — CRDs rarely appear mid-run.
+  if printf '%s\n' "$output" | grep -qiE "doesn.t have a resource type|no matches for kind|unable to connect|connection refused|forbidden|^error"; then
+    clear
+    printf '\033[2m━━━ ARGOCD APPS  not detected '; printf '%.0s━' {1..42}; printf '\033[0m\n'
+    tmux resize-pane -t "$TMUX_PANE" -y 2 2>/dev/null
+    sleep 60
+    continue
+  fi
+
+  # Tally SYNC ($3) / HEALTH ($4). healthy = Synced+Healthy — these rows are
+  # hidden from the body; the banner still counts them.
+  read -r total healthy bad warn <<<"$(printf '%s\n' "$output" | awk '
+    NR==1 || NF<4 { next }
+    {
+      total++
+      if ($4=="Healthy" && $3=="Synced")                         { healthy++ }
+      else if ($4=="Degraded" || $4=="Missing" || $4=="Unknown") { bad++ }
+      else                                                       { warn++ }
+    }
+    END { printf "%d %d %d %d", total+0, healthy+0, bad+0, warn+0 }
+  ')"
+
+  # Banner colour: red on Degraded/Missing/Unknown, yellow on
+  # Progressing/Suspended/OutOfSync, else green
+  if [[ "$bad" -gt 0 ]]; then
+    hdr='\033[1;31m'
+  elif [[ "$warn" -gt 0 ]]; then
+    hdr='\033[1;33m'
+  else
+    hdr='\033[1;32m'
+  fi
+
+  summary="${healthy}/${total} Healthy"
+  [[ "$bad"  -gt 0 ]] && summary="${summary} · ${bad} Degraded"
+  [[ "$warn" -gt 0 ]] && summary="${summary} · ${warn} Progressing/OutOfSync"
+
+  # Body: only NON-green apps. The column header only shows when there is at
+  # least one anomaly to label.
+  header=$(printf '%s\n' "$output" | awk 'NR==1{print "\033[1;37m" $0 "\033[0m"}')
+  body=$(printf '%s\n' "$output" | awk '
+    NR==1 || NF<4                                    { next }
+    $4=="Healthy" && $3=="Synced"                    { next }
+    $4=="Degraded" || $4=="Missing" || $4=="Unknown" { print "\033[1;31m" $0 "\033[0m"; next }
+                                                     { print "\033[1;33m" $0 "\033[0m" }
+  ')
+
+  clear
+  printf "${hdr}━━━ ARGOCD APPS  ${summary} "; printf '%.0s━' {1..30}; printf '\033[0m\n'
+  if [[ "$total" -eq 0 ]]; then
+    printf '\033[2m  no applications\033[0m\n'
+    lines=3
+  elif [[ -z "$body" ]]; then
+    printf '\033[1;32m  all %s apps Synced+Healthy\033[0m\n' "$total"
+    lines=3
+  else
+    printf '%s\n' "$header"
+    printf '%s\n' "$body"
+    lines=$(( $(printf '%s\n' "$body" | wc -l) + 3 ))
+  fi
+  tmux resize-pane -t "$TMUX_PANE" -y "$lines" 2>/dev/null
+  sleep 15
+done
+SCRIPT
+chmod +x /tmp/okd-argo.sh
+
 cat > /tmp/okd-mcp.sh << 'SCRIPT'
 #!/usr/bin/env bash
 export KUBECONFIG="${KUBECONFIG:-$HOME/.kube/config}"
@@ -486,7 +560,7 @@ COLS=$(tput cols 2>/dev/null); LINES=$(tput lines 2>/dev/null)
 [[ "$COLS"  =~ ^[0-9]+$ ]] && (( COLS  >= 80 )) || COLS=236
 [[ "$LINES" =~ ^[0-9]+$ ]] && (( LINES >= 40 )) || LINES=60
 
-# Build panes: (infra | cluster) / nodes / mcp / ops / pods / events.
+# Build panes: (infra | cluster) / nodes / argocd / mcp / ops / pods / events.
 # Top row is split horizontally: infra (left, tall — owns the row height) and
 # cluster info (right, shorter). The lower panes are -v splits off infra, so
 # each new one inserts directly below it and pushes the earlier ones down.
@@ -504,7 +578,10 @@ PANE_OPS=$(tmux split-window -v -p 60 -t "$PANE_INFRA" -P -F "#{pane_id}")
 # mcp: above ops
 PANE_MCP=$(tmux split-window -v -p 20 -t "$PANE_INFRA" -P -F "#{pane_id}")
 
-# nodes: above mcp
+# argocd apps: above mcp
+PANE_ARGO=$(tmux split-window -v -p 20 -t "$PANE_INFRA" -P -F "#{pane_id}")
+
+# nodes: above argocd
 PANE_NODES=$(tmux split-window -v -p 25 -t "$PANE_INFRA" -P -F "#{pane_id}")
 
 # cluster info: right portion of the top (infra) row — added LAST so only the
@@ -516,6 +593,7 @@ PANE_CLUSTER=$(tmux split-window -h -p 58 -t "$PANE_INFRA" -P -F "#{pane_id}")
 tmux send-keys -t "$PANE_INFRA"   "$ENV /tmp/okd-infra.sh"   Enter
 tmux send-keys -t "$PANE_CLUSTER" "$ENV /tmp/okd-cluster.sh" Enter
 tmux send-keys -t "$PANE_NODES"   "$ENV /tmp/okd-nodes.sh"   Enter
+tmux send-keys -t "$PANE_ARGO"    "$ENV /tmp/okd-argo.sh"    Enter
 tmux send-keys -t "$PANE_MCP"     "$ENV /tmp/okd-mcp.sh"     Enter
 tmux send-keys -t "$PANE_OPS"     "$ENV /tmp/okd-ops.sh"     Enter
 tmux send-keys -t "$PANE_PODS"    "$ENV /tmp/okd-pods.sh"    Enter

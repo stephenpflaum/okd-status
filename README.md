@@ -2,8 +2,8 @@
 
 A single-file, live **tmux dashboard for OpenShift / OKD clusters**. Run it,
 and a tmux session fills your terminal with auto-refreshing, colour-coded panes
-showing what your cluster is doing right now — nodes, operators, machine config
-pools, non-running pods, and a live event stream.
+showing what your cluster is doing right now — nodes, Argo CD apps, operators,
+machine config pools, non-running pods, and a live event stream.
 
 Everything is driven by `oc` against your current kube context. No agent, no
 server, no config required — just a shell script.
@@ -19,6 +19,7 @@ server, no config required — just a shell script.
 │  (optional SERVICES/HOSTS) │                                   │
 ├────────────────────────────┴──────────────────────────────────┤
 │ NODES   6 Ready · 0 NotReady    all 6 nodes Ready              │
+│ ARGOCD APPS   12/12 Healthy    all 12 apps Synced+Healthy      │
 │ MACHINE CONFIG POOLS                                           │
 │ OPERATORS  version: 4.x.y   all 33 operators green             │
 │ PODS (non-running)   no non-running pods                       │
@@ -33,6 +34,7 @@ server, no config required — just a shell script.
 | **cluster summary** | 30s | cluster version, nodes ready, operators degraded/progressing, MCP status, firing-alert roll-up (+ optional service & host checks) |
 | **node usage** | 45s | `oc adm top nodes` and firing Prometheus alerts (warning/critical, Watchdog dropped) |
 | **nodes** | 10s | `oc get nodes` — only **non-green** nodes (NotReady / cordoned / unknown); banner tallies Ready / NotReady / SchedulingDisabled |
+| **argocd apps** | 15s | `oc get applications.argoproj.io -A` — only **non-green** apps (Degraded / Missing / Progressing / OutOfSync); banner counts Healthy. Collapses to one dim line if Argo CD isn't installed |
 | **machine config pools** | 20s | `oc get mcp`, highlighting updating/degraded pools |
 | **operators** | 30s | cluster version + `oc get co`, hiding healthy operators so only anomalies show |
 | **pods** | 15s | `oc get pods -A` filtered to non-running (CrashLoop, Pending, OOMKill, …) |
