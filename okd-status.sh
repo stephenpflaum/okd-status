@@ -192,7 +192,12 @@ hr() {  # full-width section rule:  hr "TITLE"
   n=$(( w - ${#1} - 6 )); (( n < 3 )) && n=3
   printf "${W}━━━ %s " "$1"; for ((k=0;k<n;k++)); do printf '━'; done; printf "${N}\n"
 }
+CNAME=""; CDOM=""
 while true; do
+  # Cluster identity never changes — fetch once, retry only while unknown
+  # (e.g. dashboard launched before the cluster finished warming up).
+  [ -z "$CNAME" ] && CNAME=$(oc get infrastructure cluster -o jsonpath='{.status.infrastructureName}' 2>/dev/null)
+  [ -z "$CDOM" ]  && CDOM=$(oc get dns cluster -o jsonpath='{.spec.baseDomain}' 2>/dev/null)
   buf=$(
     # OKD node resource usage
     hr "NODE USAGE (cpu / mem)"
@@ -252,6 +257,14 @@ if extra > 0: print("MORE %d" % extra)
         done
         printf '%s\n' "$parsed" | awk -v d="$D" -v n="$N" '/^MORE/{printf "   %s+%s more%s\n",d,$2,n}'
       fi
+    fi
+
+    # Cluster identity footer
+    if [ -n "$CNAME" ] || [ -n "$CDOM" ]; then
+      echo ""
+      printf " ${D}cluster:${N} ${C}%s${N}" "${CNAME:-unknown}"
+      [ -n "$CDOM" ] && printf " ${D}· %s${N}" "$CDOM"
+      printf '\n'
     fi
   )
   clear
