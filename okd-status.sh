@@ -52,6 +52,12 @@ R='\033[1;31m'; G='\033[1;32m'; Y='\033[1;33m'; C='\033[0;36m'; W='\033[1;37m'; 
 # Load optional config (may define SERVICES and/or SSH_HOSTS bash arrays).
 [ -n "$OKD_STATUS_CONF" ] && [ -f "$OKD_STATUS_CONF" ] && source "$OKD_STATUS_CONF"
 
+# Multiplex: reuse one connection per host rather than reconnecting every
+# refresh. Repeated short-lived SSH sessions across a subnet can look like a
+# scan to an IPS/IDS, which may then block the probes and report healthy hosts
+# as unreachable.
+MUX=(-o ControlMaster=auto -o ControlPath=/tmp/okd-ssh-%r@%h:%p -o ControlPersist=5m)
+
 while true; do
   buf=$(
     printf "${W}━━━ CLUSTER "; printf '%.0s━' {1..58}; printf "${N}\n"
@@ -157,7 +163,7 @@ print("%d %d" % (len(f), crit))
       printf "${W}━━━ HOSTS "; printf '%.0s━' {1..60}; printf "${N}\n"
       for h in "${SSH_HOSTS[@]}"; do
         label="${h%%|*}"; target="${h#*|}"
-        hdr=$(ssh -o ConnectTimeout=2 -o BatchMode=yes "$target" "
+        hdr=$(ssh "${MUX[@]}" -o ConnectTimeout=2 -o BatchMode=yes "$target" "
           load=\$(awk '{print \$1, \$2, \$3}' /proc/loadavg)
           mem=\$(free -h | awk '/Mem:/{printf \"%s/%s\", \$3, \$2}')
           echo \"\$load|\$mem\"
